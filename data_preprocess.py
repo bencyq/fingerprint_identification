@@ -44,27 +44,6 @@ class MyDataset(Dataset):
         return img_file_names, labels
 
 
-train_transforms = transforms.Compose([
-    transforms.RandomHorizontalFlip(),  # 依据概率水平翻转（默认0.5）
-    transforms.RandomRotation(20),  # 随机旋转
-    transforms.ToTensor(),
-    transforms.Normalize((0.5), (0.5))  # 数据标准化，使其符合正态分布
-])
-"""如果是灰度图片使用transforms.Normalize((0.5), (0.5))，RGB图片使用transforms.Normalize((0.5，0.5，0.5), (0.5，0.5，0.5))"""
-
-test_transforms = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize((0.5), (0.5))
-])
-train_path = 'FVC2002_DB1_A'
-test_path = 'FVC2002_DB1_C'
-val_path = 'FVC2002_DB1_B'
-train_dataset = MyDataset(train_path, transforms=train_transforms, mode='train')
-test_dataset = MyDataset(test_path, transforms=test_transforms, mode='test')
-train_loader = DataLoader(dataset=train_dataset, batch_size=32, shuffle=True)
-test_loader = DataLoader(dataset=test_dataset, batch_size=1, shuffle=False)
-
-
 def train(model, device, config):
     model = model.to(device)
     if os.path.exists(config['save_path']):  # 权重文件在不在
@@ -88,26 +67,9 @@ def train(model, device, config):
         print('保存模型')
 
 
-config = {
-    'max_epoch': 3000,  # maximum number of epochs
-    'batch_size': 16,  # mini-batch size for dataloader
-    'lr': 0.0001,  # learning rate of SGD
-    'early_stop': 100000,  # early stopping epochs (the number epochs since your model's last improvement)
-    # 'accumulation_steps': 8,
-    'save_path': 'model.pth',
-}
-device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')  # 在N卡的cuda上运行，如果没有cuda就在CPU上运行
-print('device确定')
-network = ResNet()
-
-
-train(network, device, config)
-
-
 def test(model, device, config):
     model = model.to(device)
     model.load_state_dict(torch.load(config['save_path']))
-    loss_fn = nn.CrossEntropyLoss()
     correct_classes = 0
     Accuracy_list_classes = []
     for idx, data in enumerate(test_loader):
@@ -117,10 +79,48 @@ def test(model, device, config):
         _, preds_classes = torch.max(y_pred, 1)
         correct_classes += torch.sum(preds_classes == y)
         current_accuracy = correct_classes.double() / (idx + 1) * 100
-        print(f'\rcorrect_classes: {correct_classes}\t current_accuracy:{current_accuracy}', end='')
+        # print(f'\rcorrect_classes: {correct_classes}\tcurrent_accuracy:{current_accuracy}\ty_pred:{y_pred}\ty:{y}\t',
+        #       end='')
+        print(f'\rcorrect_classes: {correct_classes}\tcurrent_accuracy:{current_accuracy}\ty_pred:{y_pred}\ty:{y}\t')
     epoch_acc_classes = correct_classes.double() / len(test_loader.dataset)
     Accuracy_list_classes.append(100 * epoch_acc_classes)
     print(f'accuracy:{epoch_acc_classes}')
 
 
-test(network, device, config)
+config = {
+    'max_epoch': 50,  # maximum number of epochs
+    'batch_size': 32,  # mini-batch size for dataloader
+    'lr': 0.0001,  # learning rate of SGD
+    'early_stop': 100000,  # early stopping epochs (the number epochs since your model's last improvement)
+    # 'accumulation_steps': 8,
+    'save_path': 'model.pth',
+}
+
+if __name__ == '__main__':
+    train_transforms = transforms.Compose([
+        transforms.RandomHorizontalFlip(),  # 依据概率水平翻转（默认0.5）
+        transforms.RandomRotation(20),  # 随机旋转
+        transforms.ToTensor(),
+        transforms.Normalize((0.5), (0.5))  # 数据标准化，使其符合正态分布
+    ])
+    """如果是灰度图片使用transforms.Normalize((0.5), (0.5))，RGB图片使用transforms.Normalize((0.5，0.5，0.5), (0.5，0.5，0.5))"""
+
+    test_transforms = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.5), (0.5))
+    ])
+    train_path = 'FVC2002_DB1_A'
+    test_path = 'FVC2002_DB1_C'
+    val_path = 'FVC2002_DB1_B'
+    train_dataset = MyDataset(train_path, transforms=train_transforms, mode='train')
+    test_dataset = MyDataset(test_path, transforms=test_transforms, mode='test')
+    train_loader = DataLoader(dataset=train_dataset, batch_size=config['batch_size'], shuffle=True)
+    test_loader = DataLoader(dataset=test_dataset, batch_size=1, shuffle=False)
+
+    device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')  # 在N卡的cuda上运行，如果没有cuda就在CPU上运行
+    print('device确定')
+    network = ResNet()
+
+    train(network, device, config)
+
+    test(network, device, config)
